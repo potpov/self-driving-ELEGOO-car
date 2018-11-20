@@ -39,11 +39,12 @@ void setup() {
 	Serial.begin(9600);
 	while (!Serial) { ; }
 	cruise.init();
+	light.init();
 	/* launching the threads */
-	xTaskCreate(line_assist, (const portCHAR *)"line assist", 128, NULL, 1, NULL);
-	xTaskCreate(cruise_assist, (const portCHAR *)"cruise control", 256, NULL, 1, NULL);
-	xTaskCreate(engine_control, (const portCHAR *)"engines", 128, NULL, 1, NULL);
-	//xTaskCreate(turn_signal, (const portCHAR *)"lights", 128, NULL, 2, NULL);
+	xTaskCreate(line_assist, (const portCHAR *)"line assist", 128, NULL, 3, NULL);
+	xTaskCreate(cruise_assist, (const portCHAR *)"cruise control", 128, NULL, 3, NULL);
+	xTaskCreate(engine_control, (const portCHAR *)"engines", 128, NULL, 3, NULL);
+	xTaskCreate(turn_signal, (const portCHAR *)"lights", 64, NULL, 3, NULL);
 }
 
 void loop() {}
@@ -82,22 +83,25 @@ void cruise_assist(void *pvParameters) {
 		while(xSemaphoreTake(cruise_m, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
 		if(engineStatus == 'F'){ 
 			// dangerous situation
-			if(cruise.getDistance() < 20) { 
+			if(cruise.getDistance() < 50) { 
 				cruise.setEmergency(true);
 			}
-			// not that dangerous
-			if(cruise.getDistance() < 50 || cruise.getEmergency()) {
-				cruise.lookLeft();
-				delay(10);
-				cruise.setPass(cruise.getDistance() > 50); //set pass true if on the other line there's space
-			}
 			// easy peasy lemon squeezy
-			if(cruise.getDistance() > 50)
+			else
 				cruise.setEmergency(false);
-			cruise.lookForward();
+		}
+		//when we are stopped and stable, let's check if it is possible to pass.
+		else if(engineStatus == 'S'){ 
+			if(cruise.getEmergency()) {
+				cruise.lookLeft();
+				delay(200);
+				cruise.setPass(cruise.getDistance() > 50); //set pass true if on the other line there's space
+				cruise.lookForward();
+			}
 		} 
 		xSemaphoreGive(cruise_m);
-delay(1000);
+		
+		delay(500); // avoid line thread starvation [TO FIX]
 		if(VERBOSE){
 			Serial.print("valore di pass: ");
 			Serial.println(left);
@@ -134,13 +138,31 @@ void engine_control(void *pvParameters) {
 		
 		while(xSemaphoreTake(cruise_m, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
 		if(suggested == 'A' || cruise.getEmergency()) {
+			xSemaphoreGive(cruise_m);
+			//ask for mutex and while(getsuggested() == A || cruise.getEmergency()) wait
 			engine.shutDown();
 			delay(999999);
 		}
-		xSemaphoreGive(cruise_m);
+		else
+			xSemaphoreGive(cruise_m);
+		
 	}
 }
 
 void turn_signal(void *pvParameters) {
-	for (;;) {}
+	Serial.println("LIGHT THREAD STARTED.");
+	light.offLight();
+	bool pass;
+	for (;;) {
+		while(xSemaphoreTake(cruise_m, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		pass = cruise.getPass();
+		xSemaphoreGive(cruise_m);
+
+		if(pass)
+			light.leftLight();
+		else
+			light.offLight();
+		
+		delay(150);
+	}
 }

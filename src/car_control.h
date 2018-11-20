@@ -179,16 +179,18 @@ class Cruise {
 class Light {
   	public:
 
-  	Light() {
-		pinMode(LED, OUTPUT);
-  	}
+  	Light() {}
 
-  // use these functions in a loop with the engine phase variable as breaking condition
+	void init(){
+		pinMode(LED, OUTPUT);
+	}
+
+  	// use these functions in a loop with the engine phase variable as breaking condition
 	void leftLight() {
 		digitalWrite(LED, LOW);
-		delayMicroseconds(20);
+		delay(150);
 		digitalWrite(LED, HIGH);
-		delayMicroseconds(20);
+		delay(150);
 	}
 
 	void offLight() {
