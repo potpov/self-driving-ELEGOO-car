@@ -10,13 +10,10 @@ NOTE: we use (proto) threads! and semaphores! and a lot of other evil stuff.
 
 thread organization:
 
-PRIORITY 1 group
 thread 1: cruise control
 thread 2: line assist
 thread 3: engine control
-
-PRIORITY 2 group
-thread 1: lights control
+thread 4: lights control
 
 
 each body has three phasis: 
@@ -24,7 +21,9 @@ each body has three phasis:
 2: business logic. thread is executing.
 3: wake up phase. thread checks which threads need to be waken up and wake up one of them according to the following policy:
 
--engine wakes cruise OR line alternately
--line wakes engine (if engine is not waiting, do nothing.)
--cruise wakes engine (if engine is not waiting, it wakes up lights.)
--lights wakes up engine.
+-engine wakes cruise OR line OR alternately with a RoundRobin approach.
+-line tries to wake engine first.
+-cruise tries to wake engine first.
+-lights tries to wake engine first.
+
+each thread, in order to avoid deadlocks, wakes at least a thread if there's one waiting.

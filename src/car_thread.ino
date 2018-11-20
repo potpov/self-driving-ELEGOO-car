@@ -8,10 +8,7 @@
 #include "semphr.h"
 #include "car_control.h"
 
-/* thread constants */
-#define LINE_SPACE 20 //space between two parallel line
-#define STABLE_SPEED 100
-#define REDUCTED_SPEED 60
+
 /* debug */
 #define VERBOSE false
 
@@ -71,18 +68,40 @@ void line_assist(void *pvParameters) {
 		while(xSemaphoreTake(line_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
 
 		/* BUSINESS LOGIC */
-		if(!line.centre()){
-			line.setStable(false);
-			if(line.left())
-				line.setSuggested('L');
-			else if(line.right())
-				line.setSuggested('R');
-			else
-				line.setSuggested('A'); // no path
+		if(engine.getStatus() == 'F'){
+			if(!line.centre()){
+				for(uint8_t i = 0;; i++) {
+					line.setStable(false);
+					if(line.left()) {
+						line.setSuggested('L');
+						break;
+					}
+					else if(line.right()) {
+						line.setSuggested('R');
+						break;
+					}
+					else {
+						if(i == 8) {
+							line.setSuggested('A'); // no path
+							break;
+						}
+						else {
+							delay(100);
+						}
+					}
+				}
+			}
+			else {
+				line.setStable(true);
+				line.setSuggested('F');
+			}
 		}
-		else {
-			line.setStable(true);
-			line.setSuggested('F');
+
+		if(engine.getStatus() == 'P'){
+			while(!line.left())
+				delay(5);
+			line.setSuggested('R');
+			cruise.setPass(false); //sorpass completed.
 		}
 
 		/* SYNC ENDS -> WAKE UP THREADS */
@@ -190,10 +209,14 @@ void engine_control(void *pvParameters) {
 			engine.setSpeed(STABLE_SPEED);
 		}
 		else if(line.getSuggested() == 'L'){
+			engine.setStatus('F');
 			engine.setLeftSpeed(REDUCTED_SPEED);
+			engine.setRightSpeed(INCREASED_SPEED);
 		}
 		else if(line.getSuggested() == 'R'){
+			engine.setStatus('F');
 			engine.setRightSpeed(REDUCTED_SPEED);
+			engine.setLeftSpeed(INCREASED_SPEED);
 		}
 		
 		if(line.getSuggested() == 'A' || cruise.getEmergency()) {
@@ -203,6 +226,11 @@ void engine_control(void *pvParameters) {
 			// so let's give him the control */
 			//choice = 1;
 			engine.shutDown();
+		}
+
+		if(cruise.getPass() && engine.getStatus() != 'P'){
+			engine.pass();
+			//choice = 0;
 		}
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
@@ -260,11 +288,9 @@ void engine_control(void *pvParameters) {
 					bl = false;
 					xSemaphoreGive(line_sync);
 				}
-
 		}
+		xSemaphoreGive(mutual_ex);		
 		choice = (choice + 1) % 3; // schedule the next thread fairly.
-		xSemaphoreGive(mutual_ex);
-		
 	}
 }
 
@@ -284,7 +310,7 @@ void turn_signal(void *pvParameters) {
 		while(xSemaphoreTake(led_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
 
 		/* BUSINESS LOGIC */
-		if(cruise.getPass())
+		if(cruise.getPass() && engine.getStatus() == 'P')
 			light.leftLight();
 		else
 			light.offLight();

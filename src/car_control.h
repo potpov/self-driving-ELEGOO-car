@@ -31,6 +31,11 @@
 #define RIGHT_GRADE 90
 // light
 #define LED 12
+/* car constants */
+#define LINE_SPACE 20 //space between two parallel line
+#define STABLE_SPEED 100
+#define REDUCTED_SPEED 35
+#define INCREASED_SPEED 200
 
 /*
  * this class ensures that the car is keeping the
@@ -44,7 +49,7 @@ class Line {
   // F means forward, R suggests to go right, L suggests to go left, A suggests to stop
 	char  _SuggestedDirection;
 
-public:
+	public:
 
 	Line() {
 	}
@@ -281,12 +286,21 @@ class Engine {
 		analogWrite(L_ENGINE_POWER, _LeftSpeed);
 	}
 
+	void pass(){
+		this->start(); // re-start engines if stopped
+		_Status = 'P';
+		this->setLeftSpeed(REDUCTED_SPEED);
+		this->setRightSpeed(INCREASED_SPEED);	
+		delay(400); //time to cross the path
+	}
+
 	uint8_t getRightSpeed() { return _RightSpeed; }
 
 	uint8_t getLeftSpeed() { return _LeftSpeed; }
 
 	char getStatus() { return _Status; }
 
+	void setStatus(char status) { _Status = status; }
 };
 
 #endif
