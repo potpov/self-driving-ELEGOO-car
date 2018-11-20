@@ -1,0 +1,13 @@
+{
+    "arduino.path": "/home/potpov/arduinoIDE",
+    "arduino.commandPath": "arduino",
+    "arduino.logLevel": "info",
+    "arduino.enableUSBDetection": true,
+    "arduino.disableTestingOpen": false,
+    "arduino.skipHeaderProvider": false,
+    "arduino.defaultBaudRate": 9600,
+    "files.associations": {
+        "*.ino": "cpp"
+    },
+    
+}
