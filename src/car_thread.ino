@@ -53,11 +53,12 @@ void setup() {
 
 void loop() {}
 
+
 void line_assist(void *pvParameters) {
 	Serial.println("LINE ASSIST THREAD STARTED.");
 	for (;;) {
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		if(e || be || c || bc || led || bled)
 			bl = true;
 		else {
@@ -65,47 +66,66 @@ void line_assist(void *pvParameters) {
 			xSemaphoreGive(line_sync);
 		}
 		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(line_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(line_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 
 		/* BUSINESS LOGIC */
+		
+		//checking timeout variables first
+		if(line.lost())
+			line.startTimeoutCount();
+		else
+			line.stopTimeoutCount();
+		
+		// in line handler
 		if(engine.getStatus() == 'F'){
-			if(!line.centre()){
-				for(uint8_t i = 0;; i++) {
-					line.setStable(false);
-					if(line.left()) {
-						line.setSuggested('L');
-						break;
-					}
-					else if(line.right()) {
-						line.setSuggested('R');
-						break;
-					}
-					else {
-						if(i == 8) {
-							line.setSuggested('A'); // no path
-							break;
-						}
-						else {
-							delay(100);
-						}
-					}
-				}
-			}
-			else {
+			if(line.isTimeoutLine())
+				line.setSuggested('A');	
+			if(line.centre()){
 				line.setStable(true);
 				line.setSuggested('F');
 			}
+			else if(line.left()){
+				line.setStable(false);	
+				line.setSuggested('L');
+			}
+			else if(line.right()){
+				line.setStable(false);
+				line.setSuggested('R');	
+			}
+		}
+		
+		//pass handler
+		if(engine.getStatus() == 'P'){
+			if(line.isTimeoutPass())
+				line.setSuggested('A'); // stop. timeout reached.
+			if(!line.lost()) {
+				line.setSuggested('R');
+				line.setLineNumber(1); // record that we changed the line.
+				line.restartLineCount(); // restart time recording for this new line.
+				cruise.setPass(false); 
+			}
 		}
 
-		if(engine.getStatus() == 'P'){
-			while(!line.left())
-				delay(5);
-			line.setSuggested('R');
-			cruise.setPass(false); //sorpass completed.
+		//come back to the previous line.
+		/*
+		if(engine.getStatus() == 'B'){
+			if(!line.getTimeoutFlag())
+				line.setTimeoutFlag(true);
+
+			while(!line.right()){
+				if(line.getTimeoutFlag() && line.getTimeoutValue() > CROSS_TIMEOUT)	
+					line.setSuggested('A'); // stop. timeout reached.
+			}
+			line.setSuggested('L');
+			line.setLineNumber(0); // record that we changed the line.
+			line.setFirstTime(); 
+			cruise.setBack(false); 
+			
 		}
+		*/
 
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		l = false;
 		if(be){ //wake up engine first.
 			e = true;
@@ -126,11 +146,13 @@ void line_assist(void *pvParameters) {
 	}
 }
 
+
 void cruise_assist(void *pvParameters) {
 	Serial.println("CRUISE THREAD STARTED.");
 	for (;;) {
+
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		if(e || be || l || bl || led || bled)
 			bc = true;
 		else {
@@ -138,33 +160,43 @@ void cruise_assist(void *pvParameters) {
 			xSemaphoreGive(cruise_sync);
 		}
 		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(cruise_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(cruise_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 
 		/* BUSINESS LOGIC */
 		if(engine.getStatus() == 'F' || engine.getStatus() == 'S'){ 
 			// dangerous situation
-			if(cruise.getDistance() < 50) { 
+			if(cruise.getDistance() < BREAKING_DISTANCE) { 
 				cruise.setEmergency(true);
 			}
 			// easy peasy lemon squeezy
 			else {
 				cruise.setEmergency(false);
-				cruise.setPass(false); 
+				cruise.setPass(false); // we can go head.
 			}
 		}
-		//when we are stopped and stable, let's check if it is possible to pass.
-		if(engine.getStatus() == 'S'){ 
-			if(cruise.getEmergency()) {
-				cruise.lookLeft();
-				delay(350);
-				cruise.setPass(cruise.getDistance() > 50); //set pass true if on the other line there's space
-				cruise.lookForward();
-				delay(350);
-			}
+
+		// when we are stopped and stable, let's check if it's possible to pass.
+		if(engine.getStatus() == 'S' && cruise.getEmergency() && line.getLineNumber() == 0 && !cruise.getPass()){ 
+			cruise.lookLeft();
+			delay(350);
+			cruise.setPass(cruise.getDistance() > BREAKING_DISTANCE); //set pass true if on the other line there's space
+			cruise.lookForward();
+			delay(350);
 		} 
-		
+
+		//when we are stable we can come back on the first line.
+		/*
+		if(line.getLineNumber() == 1 && engine.getStatus() == 'F' && line.getTimeOnLine() > GOBACK_STABLE_TIME){
+			cruise.lookRight();
+			delay(350);
+			cruise.setBack(cruise.getDistance() > CROSSBACK_DISTANCE); //set back true if in the other line there's enought space
+			cruise.lookForward();
+			delay(350);
+		}
+		*/
+
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		c = false;
 		if(be){ //wake up engine first.
 			e = true;
@@ -187,13 +219,15 @@ void cruise_assist(void *pvParameters) {
 	}  
 }
 
+
 void engine_control(void *pvParameters) {
 	Serial.println("ENGINE THREAD STARTED.");
-	uint8_t choice = 0; // alternate threads.
+	uint8_t choice = 0; // alternate threads.	
 	engine.start();
 	for (;;) {
+	
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		if(l || bl || c || bc || led || bled)
 			be = true;
 		else {
@@ -201,40 +235,65 @@ void engine_control(void *pvParameters) {
 			xSemaphoreGive(engine_sync);
 		}
 		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(engine_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(engine_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 
 		/* BUSINESS LOGIC */
 		if(line.getSuggested() == 'F') {
 			engine.forward();
 			engine.setSpeed(STABLE_SPEED);
+			engine.setStatus('F');
 		}
 		else if(line.getSuggested() == 'L'){
-			engine.setStatus('F');
 			engine.setLeftSpeed(REDUCTED_SPEED);
 			engine.setRightSpeed(INCREASED_SPEED);
+			engine.setStatus('F');
 		}
 		else if(line.getSuggested() == 'R'){
-			engine.setStatus('F');
 			engine.setRightSpeed(REDUCTED_SPEED);
 			engine.setLeftSpeed(INCREASED_SPEED);
+			engine.setStatus('F');
 		}
 		
-		if(line.getSuggested() == 'A' || cruise.getEmergency()) {
-			/* if we lost the path we've done.
-			// but if we're stopping bc of the cruise control
-			// there's still hope to pass the obstacle.
-			// so let's give him the control */
-			//choice = 1;
+		if(cruise.getEmergency()) {
 			engine.shutDown();
+			engine.setStatus('S');
 		}
 
-		if(cruise.getPass() && engine.getStatus() != 'P'){
-			engine.pass();
-			//choice = 0;
+		if(cruise.getPass()){
+			if(engine.getStatus() != 'P') { //first time
+				engine.pass();
+				engine.setStatus('P');
+			}
+			for(;;){ //priority to line to catch the cross.
+				while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
+				if(bl) {
+					e = false;
+					l = true;
+					bl = false;
+					xSemaphoreGive(line_sync);
+					xSemaphoreGive(mutual_ex); 
+					break;
+				}
+				xSemaphoreGive(mutual_ex);
+				delay(10);
+			}
+			continue;
 		}
+
+		/*
+		if(cruise.getBack() && engine.getStatus() != 'B'){
+			engine.back();
+		}
+		*/
+
+		if(line.getSuggested() == 'A') {
+			engine.shutDown();
+			delay(999999999);
+		}
+
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		e = false;
 		// priority to line.
 		switch(choice){
@@ -294,12 +353,13 @@ void engine_control(void *pvParameters) {
 	}
 }
 
+
 void turn_signal(void *pvParameters) {
 	Serial.println("LIGHT THREAD STARTED.");
 	light.offLight();
 	for (;;) {
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		if(l || bl || c || bc || e || be)
 			bled = true;
 		else {
@@ -307,7 +367,7 @@ void turn_signal(void *pvParameters) {
 			xSemaphoreGive(led_sync);
 		}
 		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(led_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(led_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 
 		/* BUSINESS LOGIC */
 		if(cruise.getPass() && engine.getStatus() == 'P')
@@ -316,7 +376,7 @@ void turn_signal(void *pvParameters) {
 			light.offLight();
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(10);}
+		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 		led = false;
 		if(bc) {
 			c = true;

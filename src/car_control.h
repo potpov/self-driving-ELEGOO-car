@@ -32,10 +32,14 @@
 // light
 #define LED 12
 /* car constants */
-#define LINE_SPACE 20 //space between two parallel line
 #define STABLE_SPEED 100
-#define REDUCTED_SPEED 35
-#define INCREASED_SPEED 200
+#define REDUCTED_SPEED 40
+#define INCREASED_SPEED 150
+#define BREAKING_DISTANCE 50 //cm
+#define CROSSBACK_DISTANCE 20
+#define GOBACK_STABLE_TIME 5000
+#define LINE_TIMEOUT 1200
+#define CROSS_TIMEOUT 1700
 
 /*
  * this class ensures that the car is keeping the
@@ -45,13 +49,19 @@
  */
 
 class Line {
-	bool  _Stable;
-  // F means forward, R suggests to go right, L suggests to go left, A suggests to stop
-	char  _SuggestedDirection;
+	bool  _Stable; 
+	char  _SuggestedDirection; // F, B, P, A
+	unsigned int _LineNumber; // current line
+
+	bool _TimeoutFlag;
+	unsigned long _TimeoutCount;
+	unsigned long _LineTimeCount;
 
 	public:
 
 	Line() {
+		_LineNumber = 0;
+		_TimeoutFlag = false;
 	}
 
 	void setStable(bool val) { _Stable = val; }
@@ -75,6 +85,56 @@ class Line {
 
   	bool  centre() { return digitalRead(CENTRAL_SENSOR); }
 
+	bool lost() { return (!this->centre() && !this->left() && !this->right()); }
+
+	void setLineNumber(unsigned int line) {
+		_LineNumber = line; 
+	}
+
+	unsigned int getLineNumber(){ return _LineNumber; }
+
+	/* 
+	// those methods are used to understend how long the car is
+	// on a line, to assume if it is stable and proceed to cross line.
+	*/
+
+	void restartLineCount() {
+		_LineTimeCount = millis();
+	}
+
+	bool isLineStable() {
+		return (millis() - _LineTimeCount > GOBACK_STABLE_TIME);
+	}
+
+	/* 
+	// those methods are used to understend if the car is out of line
+	// over a constant amount of time, calculation is made without 
+	// blocking other threads.
+	*/
+
+	void startTimeoutCount() {
+		if(!_TimeoutFlag) {
+			_TimeoutFlag = true;
+			_TimeoutCount = millis();
+		}
+	}
+
+	void stopTimeoutCount() {
+		_TimeoutFlag = false;
+		_TimeoutCount = 0;
+	}
+
+	bool isTimeoutLine() {
+		if(!_TimeoutFlag)
+			return false;
+		return (millis() - _TimeoutCount > LINE_TIMEOUT);
+	}
+
+	bool isTimeoutPass() {
+		if(!_TimeoutFlag)
+			return false;
+		return (millis() - _TimeoutCount > CROSS_TIMEOUT);
+	}
 };
 
 
@@ -87,6 +147,7 @@ class Cruise {
 	float  _Distance;
 	bool  _EmergencyBreak;
 	bool  _AllowPass;
+	bool _AllowBack;
 	Servo EBS;
 
 
@@ -149,12 +210,19 @@ class Cruise {
 		EBS.write(LEFT_GRADE);
   	}
 
+	void lookRight(){
+		EBS.write(RIGHT_GRADE);
+  	}
 	void customPosition(unsigned int pos){
 		EBS.write(pos);
 	}
 
 	void setPass(bool val) {
 		_AllowPass = val;
+	}
+
+	void setBack(bool val) {
+		_AllowBack = val;
 	}
 
 	void setEmergency(bool val) {
@@ -168,6 +236,10 @@ class Cruise {
 
 	bool getPass() {
 		return _AllowPass;
+	}
+
+	bool getBack() {
+		return _AllowBack;
 	}
 
 	bool getEmergency() {
@@ -192,10 +264,7 @@ class Light {
 
   	// use these functions in a loop with the engine phase variable as breaking condition
 	void leftLight() {
-		digitalWrite(LED, LOW);
-		delay(150);
 		digitalWrite(LED, HIGH);
-		delay(150);
 	}
 
 	void offLight() {
@@ -212,12 +281,12 @@ class Light {
  */
 
 class Engine {
-  uint8_t _LeftSpeed;
-  uint8_t _RightSpeed;
-  // S = stopped, F = forward, P = passing, C = cursing
-  char  _Status;
+	uint8_t _LeftSpeed;
+	uint8_t _RightSpeed;
+	// S = stopped, F = forward, P = passing, C = cursing
+	char  _Status;
 
-  public:
+	public:
 
 	Engine() {
 		_LeftSpeed = 0;
@@ -238,7 +307,6 @@ class Engine {
 	}
 
 	void forward() {
-		_Status = 'F';
 		digitalWrite(R_FRONT_ENGINE_CONTROL, HIGH);
 		digitalWrite(L_FRONT_ENGINE_CONTROL, HIGH);
 		digitalWrite(R_REAR_ENGINE_CONTROL, LOW);
@@ -246,7 +314,6 @@ class Engine {
 	}
 
 	void left() {
-		_Status = 'C';
 		digitalWrite(R_FRONT_ENGINE_CONTROL, HIGH);
 		digitalWrite(L_FRONT_ENGINE_CONTROL, LOW);
 		digitalWrite(R_REAR_ENGINE_CONTROL, LOW);
@@ -254,7 +321,6 @@ class Engine {
 	}
 
 	void right() {
-		_Status = 'C';
 		digitalWrite(R_FRONT_ENGINE_CONTROL, LOW);
 		digitalWrite(L_FRONT_ENGINE_CONTROL, HIGH);
 		digitalWrite(R_REAR_ENGINE_CONTROL, HIGH);
@@ -264,7 +330,6 @@ class Engine {
 	void shutDown() {
 		_RightSpeed = 0;
 		_LeftSpeed = 0;
-		_Status = 'S';
 		analogWrite(R_ENGINE_POWER, 0);
 		analogWrite(L_ENGINE_POWER, 0);
 	}
@@ -288,12 +353,18 @@ class Engine {
 
 	void pass(){
 		this->start(); // re-start engines if stopped
-		_Status = 'P';
 		this->setLeftSpeed(REDUCTED_SPEED);
 		this->setRightSpeed(INCREASED_SPEED);	
-		delay(400); //time to cross the path
+		delay(650); //time to cross the path
 	}
 
+	void back(){
+		this->start(); // re-start engines if stopped
+		_Status = 'B';
+		this->setRightSpeed(REDUCTED_SPEED);
+		this->setLeftSpeed(INCREASED_SPEED);	
+		delay(400); //time to cross the path
+	}
 	uint8_t getRightSpeed() { return _RightSpeed; }
 
 	uint8_t getLeftSpeed() { return _LeftSpeed; }
