@@ -96,13 +96,18 @@ void line_assist(void *pvParameters) {
 		
 		//pass handler
 		if(engine.getStatus() == 'P'){
-			if(line.isTimeoutPass())
-				line.setSuggested('A'); // stop. timeout reached.
-			if(!line.lost()) {
-				line.setSuggested('R');
-				line.setLineNumber(1); // record that we changed the line.
-				line.restartLineCount(); // restart time recording for this new line.
-				cruise.setPass(false); 
+			for(;;){
+				if(line.isTimeoutPass()) {
+					line.setSuggested('A'); // stop. timeout reached.
+					break;
+				}
+				if(!line.lost()) {
+					line.setSuggested('R');
+					line.setLineNumber(1); // record that we changed the line.
+					line.restartLineCount(); // restart time recording for this new line.
+					cruise.setPass(false); 
+					break;
+				}
 			}
 		}
 
@@ -259,6 +264,11 @@ void engine_control(void *pvParameters) {
 			engine.setStatus('S');
 		}
 
+		if(line.getSuggested() == 'A') {
+			engine.shutDown();
+			delay(999999999);
+		}
+
 		if(cruise.getPass()){
 			if(engine.getStatus() != 'P') { //first time
 				engine.pass();
@@ -286,10 +296,7 @@ void engine_control(void *pvParameters) {
 		}
 		*/
 
-		if(line.getSuggested() == 'A') {
-			engine.shutDown();
-			delay(999999999);
-		}
+
 
 		
 		/* SYNC ENDS -> WAKE UP THREADS */

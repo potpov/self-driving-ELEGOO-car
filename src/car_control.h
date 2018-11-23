@@ -27,8 +27,8 @@
 #define ECHO A4
 #define TRIGGER A5
 #define FORWARD_GRADE 140
-#define LEFT_GRADE 179
-#define RIGHT_GRADE 90
+#define LEFT_GRADE 155
+#define RIGHT_GRADE 125
 // light
 #define LED 12
 /* car constants */
