@@ -59,8 +59,7 @@ class Scheduler {
 			return false;
 	}
 
-	void leaveSlot(){ // only if you cant wakeup anyone else.
-		sync[leader].blocked = true;
+	void leaveSlot(){ // only if you cant wakeup anyone.
 		leader = -1;
 	}
 
@@ -89,8 +88,6 @@ class Scheduler {
 			roundRobinCounter = preference;
 		
 		for(uint8_t i = 0; i<THREADS_NUM; i++){
-			if(roundRobinCounter == leader)
-				continue;
 			if(this->wake(roundRobinCounter))
 				return true;
 			roundRobinCounter = (roundRobinCounter + 1) % THREADS_NUM;
