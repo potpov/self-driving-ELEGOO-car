@@ -53,7 +53,6 @@ void line_assist(void *pvParameters) {
 		scheduler.leaveSafeZone();
 		scheduler.checkLogin(LINE_T);
 
-		Serial.println("LINE in control.");
 		/* BUSINESS LOGIC */
 		//checking timeout variables first
 		if(line.lost())
@@ -63,7 +62,7 @@ void line_assist(void *pvParameters) {
 		
 		// in line handler
 		if(engine.getStatus() == 'F'){
-			if(line.isTimeoutLine())
+			if(line.isTimeoutLine() && line.getTimeOnThisLine() > NOMORE_JUST_CROSSED_TIME)
 				line.setSuggested('A');	
 			if(line.centre()){
 				line.setStable(true);
@@ -133,7 +132,6 @@ void cruise_assist(void *pvParameters) {
 		scheduler.leaveSafeZone();
 		scheduler.checkLogin(CRUISE_T);
 
-		Serial.println("cruise in control.");
 		/* BUSINESS LOGIC */
 		if(engine.getStatus() == 'F' || engine.getStatus() == 'S'){ 
 			// dangerous situation
@@ -189,7 +187,6 @@ void engine_control(void *pvParameters) {
 		scheduler.leaveSafeZone();
 		scheduler.checkLogin(ENGINE_T);
 
-		Serial.println("engine in control.");
 		/* BUSINESS LOGIC */
 		if(line.getSuggested() == 'F') {
 			engine.forward();
@@ -262,7 +259,6 @@ void turn_signal(void *pvParameters) {
 		scheduler.leaveSafeZone();
 		scheduler.checkLogin(LIGHT_T);
 		
-		Serial.println("LIGHT in control.");
 		/* BUSINESS LOGIC */
 		if(cruise.getPass() && engine.getStatus() == 'P')
 			light.leftLight();

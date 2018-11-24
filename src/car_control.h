@@ -37,8 +37,10 @@
 #define INCREASED_SPEED 150
 #define BREAKING_DISTANCE 50 //cm
 #define CROSSBACK_DISTANCE 20
+/* time constraints */
 #define GOBACK_STABLE_TIME 5000
-#define LINE_TIMEOUT 1200
+#define NOMORE_JUST_CROSSED_TIME 1200
+#define LINE_TIMEOUT 100
 #define CROSS_TIMEOUT 1850
 
 /*
@@ -61,6 +63,7 @@ class Line {
 
 	Line() {
 		_LineNumber = 0;
+		_LineTimeCount = 0;
 		_TimeoutFlag = false;
 	}
 
@@ -104,6 +107,10 @@ class Line {
 
 	bool isLineStable() {
 		return (millis() - _LineTimeCount > GOBACK_STABLE_TIME);
+	}
+
+	unsigned long getTimeOnThisLine(){
+		return millis() - _LineTimeCount;
 	}
 
 	/* 
