@@ -26,9 +26,9 @@
 #define SERVO_PIN 3
 #define ECHO A4
 #define TRIGGER A5
-#define FORWARD_GRADE 140
-#define LEFT_GRADE 155
-#define RIGHT_GRADE 125
+#define FORWARD_GRADE 137
+#define LEFT_GRADE 170
+#define RIGHT_GRADE 110
 // light
 #define LED 12
 /* car constants */
@@ -39,7 +39,7 @@
 #define CROSSBACK_DISTANCE 20
 #define GOBACK_STABLE_TIME 5000
 #define LINE_TIMEOUT 1200
-#define CROSS_TIMEOUT 1700
+#define CROSS_TIMEOUT 1850
 
 /*
  * this class ensures that the car is keeping the

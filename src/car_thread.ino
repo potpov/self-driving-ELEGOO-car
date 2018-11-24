@@ -7,10 +7,14 @@
 #include <Arduino_FreeRTOS.h>
 #include "semphr.h"
 #include "car_control.h"
+#include "scheduler.h"
 
-
-/* debug */
-#define VERBOSE false
+/* using strings instead of PIDS for a more readble code */
+#define ENGINE_T	0
+#define LINE_T 		1
+#define CRUISE_T 	2
+#define LIGHT_T		3
+#define THREADS_NUM 4
 
 /* define thread's bodies */
 void line_assist(void *pvParameters);
@@ -18,26 +22,12 @@ void cruise_assist(void *pvParameters);
 void engine_control(void *pvParameters);
 void turn_signal(void *pvParameters);
 
-/* private sems for sync */
-SemaphoreHandle_t mutual_ex = xSemaphoreCreateMutex();
-SemaphoreHandle_t cruise_sync = xSemaphoreCreateCounting(1, 0);
-SemaphoreHandle_t line_sync = xSemaphoreCreateCounting(1, 0);
-SemaphoreHandle_t engine_sync = xSemaphoreCreateCounting(1, 0);
-SemaphoreHandle_t led_sync = xSemaphoreCreateCounting(1, 0);
-/* status variables */
-bool c = false;
-bool bc = false;
-bool l = false;
-bool bl = false;
-bool e = false;
-bool be = false;
-bool led = false;
-bool bled = false;
 /* shared objects */
 Cruise	cruise;
 Line	line;
 Light	light;
 Engine 	engine;
+Scheduler scheduler;
 
 void setup() { 
 	Serial.begin(9600);
@@ -58,18 +48,13 @@ void line_assist(void *pvParameters) {
 	Serial.println("LINE ASSIST THREAD STARTED.");
 	for (;;) {
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		if(e || be || c || bc || led || bled)
-			bl = true;
-		else {
-			l = true;
-			xSemaphoreGive(line_sync);
-		}
-		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(line_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
+		scheduler.enterSafeZone();
+		scheduler.loginRequest(LINE_T);
+		scheduler.leaveSafeZone();
+		scheduler.checkLogin(LINE_T);
 
+		Serial.println("LINE in control.");
 		/* BUSINESS LOGIC */
-		
 		//checking timeout variables first
 		if(line.lost())
 			line.startTimeoutCount();
@@ -130,24 +115,10 @@ void line_assist(void *pvParameters) {
 		*/
 
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		l = false;
-		if(be){ //wake up engine first.
-			e = true;
-			be = false;
-			xSemaphoreGive(engine_sync);
-		}
-		else if(bc) {
-			c = true;
-			bc = false;
-			xSemaphoreGive(cruise_sync);
-		}
-		else if(bled){
-			led = true;
-			bled = false;
-			xSemaphoreGive(led_sync);
-		}
-		xSemaphoreGive(mutual_ex);
+		scheduler.enterSafeZone();
+		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
+			scheduler.leaveSlot();
+		scheduler.leaveSafeZone();
 	}
 }
 
@@ -157,16 +128,12 @@ void cruise_assist(void *pvParameters) {
 	for (;;) {
 
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		if(e || be || l || bl || led || bled)
-			bc = true;
-		else {
-			c = true;
-			xSemaphoreGive(cruise_sync);
-		}
-		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(cruise_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
+		scheduler.enterSafeZone();
+		scheduler.loginRequest(CRUISE_T);
+		scheduler.leaveSafeZone();
+		scheduler.checkLogin(CRUISE_T);
 
+		Serial.println("cruise in control.");
 		/* BUSINESS LOGIC */
 		if(engine.getStatus() == 'F' || engine.getStatus() == 'S'){ 
 			// dangerous situation
@@ -201,47 +168,28 @@ void cruise_assist(void *pvParameters) {
 		*/
 
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		c = false;
-		if(be){ //wake up engine first.
-			e = true;
-			be = false;
-			xSemaphoreGive(engine_sync);
-		}
-		else if(bl){
-			l = true;
-			bl = false;
-			xSemaphoreGive(line_sync);
-		}
-		else if(bled){
-			led = true;
-			bled = false;
-			xSemaphoreGive(led_sync);
-		}
-		xSemaphoreGive(mutual_ex);
-
-		
+				/* SYNC ENDS -> WAKE UP THREADS */
+		scheduler.enterSafeZone();
+		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
+			scheduler.leaveSlot();
+		scheduler.leaveSafeZone();	
 	}  
 }
 
 
 void engine_control(void *pvParameters) {
-	Serial.println("ENGINE THREAD STARTED.");
-	uint8_t choice = 0; // alternate threads.	
+	Serial.println("ENGINE THREAD STARTED.");	
 	engine.start();
+	uint8_t preference = 0;
 	for (;;) {
 	
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		if(l || bl || c || bc || led || bled)
-			be = true;
-		else {
-			e = true;
-			xSemaphoreGive(engine_sync);
-		}
-		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(engine_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
+		scheduler.enterSafeZone();
+		scheduler.loginRequest(ENGINE_T);
+		scheduler.leaveSafeZone();
+		scheduler.checkLogin(ENGINE_T);
 
+		Serial.println("engine in control.");
 		/* BUSINESS LOGIC */
 		if(line.getSuggested() == 'F') {
 			engine.forward();
@@ -273,18 +221,16 @@ void engine_control(void *pvParameters) {
 			if(engine.getStatus() != 'P') { //first time
 				engine.pass();
 				engine.setStatus('P');
+				if(scheduler.wake(LIGHT_T))
+					continue;
 			}
 			for(;;){ //priority to line to catch the cross.
-				while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-				if(bl) {
-					e = false;
-					l = true;
-					bl = false;
-					xSemaphoreGive(line_sync);
-					xSemaphoreGive(mutual_ex); 
+				scheduler.enterSafeZone();
+				if(scheduler.wake(LINE_T)){
+					scheduler.leaveSafeZone();
 					break;
 				}
-				xSemaphoreGive(mutual_ex);
+				scheduler.leaveSafeZone();
 				delay(10);
 			}
 			continue;
@@ -295,68 +241,13 @@ void engine_control(void *pvParameters) {
 			engine.back();
 		}
 		*/
-
-
-
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		e = false;
-		// priority to line.
-		switch(choice){
-			case 0:
-				if(bl){
-					l = true;
-					bl = false;
-					xSemaphoreGive(line_sync);
-				}
-				else if(bc){
-					c = true;
-					bc = false;
-					xSemaphoreGive(cruise_sync);
-				}
-				else if(bled){
-					led = true;
-					bled = false;
-					xSemaphoreGive(led_sync);
-				}
-				break;
-			case 1:
-				if(bc){
-					c = true;
-					bc = false;
-					xSemaphoreGive(cruise_sync);
-				}
-				else if(bl){
-					l = true;
-					bl = false;
-					xSemaphoreGive(line_sync);
-				}
-				else if(bled){
-					led = true;
-					bled = false;
-					xSemaphoreGive(led_sync);
-				}
-				break;
-			case 2:
-				if(bled){
-					led = true;
-					bled = false;
-					xSemaphoreGive(led_sync);
-				}
-				else if(bc){
-					c = true;
-					bc = false;
-					xSemaphoreGive(cruise_sync);
-				}
-				else if(bl){
-					l = true;
-					bl = false;
-					xSemaphoreGive(line_sync);
-				}
-		}
-		xSemaphoreGive(mutual_ex);		
-		choice = (choice + 1) % 3; // schedule the next thread fairly.
+		scheduler.enterSafeZone();
+		if(!scheduler.roundRobin(preference))
+			scheduler.leaveSlot();
+		scheduler.leaveSafeZone();
+		preference = (preference + 1) % THREADS_NUM;
 	}
 }
 
@@ -366,16 +257,12 @@ void turn_signal(void *pvParameters) {
 	light.offLight();
 	for (;;) {
 		/* SYNCRONIZATION */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		if(l || bl || c || bc || e || be)
-			bled = true;
-		else {
-			led = true;
-			xSemaphoreGive(led_sync);
-		}
-		xSemaphoreGive(mutual_ex);
-		while(xSemaphoreTake(led_sync, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-
+		scheduler.enterSafeZone();
+		scheduler.loginRequest(LIGHT_T);
+		scheduler.leaveSafeZone();
+		scheduler.checkLogin(LIGHT_T);
+		
+		Serial.println("LIGHT in control.");
 		/* BUSINESS LOGIC */
 		if(cruise.getPass() && engine.getStatus() == 'P')
 			light.leftLight();
@@ -383,23 +270,9 @@ void turn_signal(void *pvParameters) {
 			light.offLight();
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
-		while(xSemaphoreTake(mutual_ex, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
-		led = false;
-		if(bc) {
-			c = true;
-			bc = false;
-			xSemaphoreGive(cruise_sync);
-		}
-		else if(bl){
-			l = true;
-			bl = false;
-			xSemaphoreGive(line_sync);
-		}
-		else if(be){ //wake up engine first.
-			e = true;
-			be = false;
-			xSemaphoreGive(engine_sync);
-		}
-		xSemaphoreGive(mutual_ex);
+		scheduler.enterSafeZone();
+		if(!scheduler.roundRobin(LINE_T))
+			scheduler.leaveSlot();
+		scheduler.leaveSafeZone();
 	}
 }
