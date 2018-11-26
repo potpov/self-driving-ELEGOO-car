@@ -218,8 +218,12 @@ void engine_control(void *pvParameters) {
 			if(engine.getStatus() != 'P') { //first time
 				engine.pass();
 				engine.setStatus('P');
-				if(scheduler.wake(LIGHT_T))
+				scheduler.enterSafeZone();
+				if(scheduler.wake(LIGHT_T)){
+					scheduler.leaveSafeZone();
 					continue;
+				}
+				scheduler.leaveSafeZone();
 			}
 			for(;;){ //priority to line to catch the cross.
 				scheduler.enterSafeZone();
