@@ -38,7 +38,7 @@
 #define BREAKING_DISTANCE 50 //cm
 #define CROSSBACK_DISTANCE 20
 /* time constraints */
-#define GOBACK_STABLE_TIME 5000
+#define GOBACK_STABLE_TIME 2400
 #define NOMORE_JUST_CROSSED_TIME 1200
 #define LINE_TIMEOUT 100
 #define CROSS_TIMEOUT 1850
@@ -367,11 +367,11 @@ class Engine {
 
 	void back(){
 		this->start(); // re-start engines if stopped
-		_Status = 'B';
 		this->setRightSpeed(REDUCTED_SPEED);
 		this->setLeftSpeed(INCREASED_SPEED);	
-		delay(400); //time to cross the path
+		delay(650); //time to cross the path
 	}
+
 	uint8_t getRightSpeed() { return _RightSpeed; }
 
 	uint8_t getLeftSpeed() { return _LeftSpeed; }

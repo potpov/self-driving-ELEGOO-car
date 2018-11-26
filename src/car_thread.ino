@@ -47,6 +47,7 @@ void loop() {}
 void line_assist(void *pvParameters) {
 	Serial.println("LINE ASSIST THREAD STARTED.");
 	for (;;) {
+		Serial.println("LINE working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(LINE_T);
@@ -95,28 +96,27 @@ void line_assist(void *pvParameters) {
 			}
 		}
 
-		//come back to the previous line.
-		/*
+		//come back handler
 		if(engine.getStatus() == 'B'){
-			if(!line.getTimeoutFlag())
-				line.setTimeoutFlag(true);
-
-			while(!line.right()){
-				if(line.getTimeoutFlag() && line.getTimeoutValue() > CROSS_TIMEOUT)	
+			for(;;){
+				if(line.isTimeoutPass()) {
 					line.setSuggested('A'); // stop. timeout reached.
+					break;
+				}
+				if(!line.lost()) {
+					line.setSuggested('L');
+					line.setLineNumber(0); // record that we changed the line.
+					line.restartLineCount(); // restart time recording for this new line.
+					cruise.setBack(false); 
+					break;
+				}
 			}
-			line.setSuggested('L');
-			line.setLineNumber(0); // record that we changed the line.
-			line.setFirstTime(); 
-			cruise.setBack(false); 
-			
 		}
-		*/
 
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
-			scheduler.leaveSlot();
+		if(!scheduler.roundRobin(LINE_T, ENGINE_T)) // try to wake engine first.
+			scheduler.leaveSlot(LINE_T);
 		scheduler.leaveSafeZone();
 	}
 }
@@ -125,7 +125,7 @@ void line_assist(void *pvParameters) {
 void cruise_assist(void *pvParameters) {
 	Serial.println("CRUISE THREAD STARTED.");
 	for (;;) {
-
+		Serial.println("CRUISE working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(CRUISE_T);
@@ -155,21 +155,18 @@ void cruise_assist(void *pvParameters) {
 		} 
 
 		//when we are stable we can come back on the first line.
-		/*
-		if(line.getLineNumber() == 1 && engine.getStatus() == 'F' && line.getTimeOnLine() > GOBACK_STABLE_TIME){
+		if(line.getLineNumber() == 1 && engine.getStatus() == 'F' && line.isLineStable()){
 			cruise.lookRight();
 			delay(350);
 			cruise.setBack(cruise.getDistance() > CROSSBACK_DISTANCE); //set back true if in the other line there's enought space
 			cruise.lookForward();
 			delay(350);
 		}
-		*/
 
 		/* SYNC ENDS -> WAKE UP THREADS */
-				/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
-			scheduler.leaveSlot();
+		if(!scheduler.roundRobin(CRUISE_T, ENGINE_T)) // try to wake engine first.
+			scheduler.leaveSlot(CRUISE_T);
 		scheduler.leaveSafeZone();	
 	}  
 }
@@ -180,7 +177,7 @@ void engine_control(void *pvParameters) {
 	engine.start();
 	uint8_t preference = 0;
 	for (;;) {
-	
+		Serial.println("ENGINE working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(ENGINE_T);
@@ -219,7 +216,7 @@ void engine_control(void *pvParameters) {
 				engine.pass();
 				engine.setStatus('P');
 				scheduler.enterSafeZone();
-				if(scheduler.wake(LIGHT_T)){
+				if(scheduler.wake(ENGINE_T, LIGHT_T)){
 					scheduler.leaveSafeZone();
 					continue;
 				}
@@ -227,7 +224,7 @@ void engine_control(void *pvParameters) {
 			}
 			for(;;){ //priority to line to catch the cross.
 				scheduler.enterSafeZone();
-				if(scheduler.wake(LINE_T)){
+				if(scheduler.wake(ENGINE_T, LINE_T)){
 					scheduler.leaveSafeZone();
 					break;
 				}
@@ -237,16 +234,34 @@ void engine_control(void *pvParameters) {
 			continue;
 		}
 
-		/*
-		if(cruise.getBack() && engine.getStatus() != 'B'){
-			engine.back();
+		// coming back to first line
+		if(cruise.getBack()){
+			if(engine.getStatus() != 'B') { //first time
+				engine.back();
+				engine.setStatus('B');
+				scheduler.enterSafeZone();
+				if(scheduler.wake(ENGINE_T, LIGHT_T)){
+					scheduler.leaveSafeZone();
+					continue;
+				}
+				scheduler.leaveSafeZone();
+			}
+			for(;;){ //priority to line to catch the cross.
+				scheduler.enterSafeZone();
+				if(scheduler.wake(ENGINE_T, LINE_T)){
+					scheduler.leaveSafeZone();
+					break;
+				}
+				scheduler.leaveSafeZone();
+				delay(10);
+			}
+			continue;
 		}
-		*/
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(preference))
-			scheduler.leaveSlot();
+		if(!scheduler.roundRobin(ENGINE_T, preference))
+			scheduler.leaveSlot(ENGINE_T);
 		scheduler.leaveSafeZone();
 		preference = (preference + 1) % THREADS_NUM;
 	}
@@ -257,6 +272,7 @@ void turn_signal(void *pvParameters) {
 	Serial.println("LIGHT THREAD STARTED.");
 	light.offLight();
 	for (;;) {
+		Serial.println("LIGHT working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(LIGHT_T);
@@ -271,8 +287,8 @@ void turn_signal(void *pvParameters) {
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(LINE_T))
-			scheduler.leaveSlot();
+		if(!scheduler.roundRobin(LIGHT_T, LINE_T))
+			scheduler.leaveSlot(LIGHT_T);
 		scheduler.leaveSafeZone();
 	}
 }

@@ -10,6 +10,7 @@
 #endif
 
 struct syncronizer {
+	bool executing;
 	bool blocked;
 	SemaphoreHandle_t sem;
 };
@@ -17,7 +18,6 @@ struct syncronizer {
 class Scheduler {
 	struct syncronizer sync[THREADS_NUM];
 	SemaphoreHandle_t mutual_ex;
-	int8_t leader; // note which thread is executing
 	uint8_t roundRobinCounter;
 
 	public:
@@ -25,10 +25,10 @@ class Scheduler {
 	Scheduler(){
 		for(uint8_t i = 0; i < THREADS_NUM; i++) {
 			sync[i].blocked = false;
+			sync[i].executing = false;
 			sync[i].sem = xSemaphoreCreateCounting(1, 0);
 		}
 		mutual_ex = xSemaphoreCreateMutex();
-		leader = -1; // none working
 		roundRobinCounter = 0;
 	}
 		
@@ -43,15 +43,21 @@ class Scheduler {
 
 	/* ALWAYS BE SURE YOU ENTERED IN THE SAFE ZONE BEFORE EXECUTE THOSE METHODS. */
 
-	bool isSlotAvailable(){
-		return !(leader >= 0);
+	bool isSlotAvailable(uint8_t mypid){
+		for(uint8_t i=0; i<THREADS_NUM; i++) {
+			if(mypid == i)
+				continue;
+			if(sync[i].executing || sync[i].blocked)
+				return false;
+		}
+		return true;
 	}
 
-	bool wake(uint8_t target) {
+	bool wake(uint8_t mypid, uint8_t target) {
 		if(sync[target].blocked) {
 			sync[target].blocked = false;
-			sync[leader].blocked = true; // stop the current thread
-			leader = target; // record the pid as the new exec tread.
+			sync[target].executing = true;
+			sync[mypid].executing = false;
 			xSemaphoreGive(sync[target].sem);
 			return true;
 		}
@@ -59,14 +65,14 @@ class Scheduler {
 			return false;
 	}
 
-	void leaveSlot(){ // only if you cant wakeup anyone.
-		leader = -1;
+	void leaveSlot(uint8_t mypid){ // only if you cant wakeup anyone.
+		sync[mypid].executing = false;
 	}
 
 	/* methods to gain the leadership */
 	void loginRequest(uint8_t mypid){
-		if(isSlotAvailable()){
-			leader = mypid;
+		if(isSlotAvailable(mypid)){
+			sync[mypid].executing = true;
 			xSemaphoreGive(sync[mypid].sem);
 		}
 		else
@@ -78,17 +84,18 @@ class Scheduler {
 		while(xSemaphoreTake(sync[mypid].sem, portMAX_DELAY) != pdTRUE) {vTaskDelay(3);}
 	}
 
-	/* RR: as this is a shared class, the internal variable _preference_ can be 
+	/* 
+	// RR: as this is a shared class, the internal variable _preference_ can be 
 	// edited by all the threads which call the function. threads which want 
 	// to have a real roundrobin have to keep an internal variable and use it
 	// as preference.
 	*/
-	bool roundRobin(int8_t preference = -1){
+	bool roundRobin(uint8_t mypid, int8_t preference = -1){
 		if(preference >= 0)
 			roundRobinCounter = preference;
 		
 		for(uint8_t i = 0; i<THREADS_NUM; i++){
-			if(this->wake(roundRobinCounter))
+			if(this->wake(mypid, roundRobinCounter))
 				return true;
 			roundRobinCounter = (roundRobinCounter + 1) % THREADS_NUM;
 		}
