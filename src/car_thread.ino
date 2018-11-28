@@ -31,7 +31,7 @@ Scheduler scheduler;
 
 void setup() { 
 	Serial.begin(9600);
-	while (!Serial) { ; }
+	//while (!Serial) { ; }
 	cruise.init();
 	light.init();
 	/* launching the threads */
@@ -115,8 +115,8 @@ void line_assist(void *pvParameters) {
 
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(LINE_T, ENGINE_T)) // try to wake engine first.
-			scheduler.leaveSlot(LINE_T);
+		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
+			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
 	}
 }
@@ -165,8 +165,8 @@ void cruise_assist(void *pvParameters) {
 
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(CRUISE_T, ENGINE_T)) // try to wake engine first.
-			scheduler.leaveSlot(CRUISE_T);
+		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
+			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();	
 	}  
 }
@@ -216,7 +216,7 @@ void engine_control(void *pvParameters) {
 				engine.pass();
 				engine.setStatus('P');
 				scheduler.enterSafeZone();
-				if(scheduler.wake(ENGINE_T, LIGHT_T)){
+				if(scheduler.wake(LIGHT_T)){
 					scheduler.leaveSafeZone();
 					continue;
 				}
@@ -224,7 +224,7 @@ void engine_control(void *pvParameters) {
 			}
 			for(;;){ //priority to line to catch the cross.
 				scheduler.enterSafeZone();
-				if(scheduler.wake(ENGINE_T, LINE_T)){
+				if(scheduler.wake(LINE_T)){
 					scheduler.leaveSafeZone();
 					break;
 				}
@@ -240,7 +240,7 @@ void engine_control(void *pvParameters) {
 				engine.back();
 				engine.setStatus('B');
 				scheduler.enterSafeZone();
-				if(scheduler.wake(ENGINE_T, LIGHT_T)){
+				if(scheduler.wake(LIGHT_T)){
 					scheduler.leaveSafeZone();
 					continue;
 				}
@@ -248,7 +248,7 @@ void engine_control(void *pvParameters) {
 			}
 			for(;;){ //priority to line to catch the cross.
 				scheduler.enterSafeZone();
-				if(scheduler.wake(ENGINE_T, LINE_T)){
+				if(scheduler.wake(LINE_T)){
 					scheduler.leaveSafeZone();
 					break;
 				}
@@ -260,8 +260,8 @@ void engine_control(void *pvParameters) {
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(ENGINE_T, preference))
-			scheduler.leaveSlot(ENGINE_T);
+		if(!scheduler.roundRobin(preference))
+			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
 		preference = (preference + 1) % THREADS_NUM;
 	}
@@ -287,8 +287,8 @@ void turn_signal(void *pvParameters) {
 		
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
-		if(!scheduler.roundRobin(LIGHT_T, LINE_T))
-			scheduler.leaveSlot(LIGHT_T);
+		if(!scheduler.roundRobin(LINE_T))
+			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
 	}
 }
