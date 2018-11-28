@@ -215,13 +215,17 @@ void engine_control(void *pvParameters) {
 			if(engine.getStatus() != 'P') { //first time
 				engine.pass();
 				engine.setStatus('P');
+			}
+			
+			if(!light.isLightOn()) {
 				scheduler.enterSafeZone();
 				if(scheduler.wake(LIGHT_T)){
-					scheduler.leaveSafeZone();
-					continue;
+				scheduler.leaveSafeZone();
+				continue;
 				}
 				scheduler.leaveSafeZone();
 			}
+
 			for(;;){ //priority to line to catch the cross.
 				scheduler.enterSafeZone();
 				if(scheduler.wake(LINE_T)){
@@ -239,13 +243,17 @@ void engine_control(void *pvParameters) {
 			if(engine.getStatus() != 'B') { //first time
 				engine.back();
 				engine.setStatus('B');
+			}
+
+			if(!light.isLightOn()) {
 				scheduler.enterSafeZone();
 				if(scheduler.wake(LIGHT_T)){
-					scheduler.leaveSafeZone();
-					continue;
+				scheduler.leaveSafeZone();
+				continue;
 				}
 				scheduler.leaveSafeZone();
 			}
+
 			for(;;){ //priority to line to catch the cross.
 				scheduler.enterSafeZone();
 				if(scheduler.wake(LINE_T)){

@@ -261,6 +261,7 @@ class Cruise {
  */
 
 class Light {
+	bool _status;
   	public:
 
   	Light() {}
@@ -271,12 +272,16 @@ class Light {
 
   	// use these functions in a loop with the engine phase variable as breaking condition
 	void leftLight() {
+		_status = true;
 		digitalWrite(LED, HIGH);
 	}
 
 	void offLight() {
+		_status = false;
 		digitalWrite(LED, LOW);
 	}
+
+	bool isLightOn(){ return _status; }
 
 };
 
