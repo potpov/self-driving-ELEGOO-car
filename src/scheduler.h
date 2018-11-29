@@ -8,6 +8,7 @@
 #ifndef THREADS_NUM
 #define THREADS_NUM 4
 #endif
+#define NONE		-1
 
 struct syncronizer {
 	bool blocked;
@@ -19,7 +20,6 @@ class Scheduler {
 	SemaphoreHandle_t mutual_ex;
 	int8_t leader; // note which thread is executing
 	uint8_t roundRobinCounter;
-
 	public:
 
 	Scheduler(){
@@ -28,7 +28,7 @@ class Scheduler {
 			sync[i].sem = xSemaphoreCreateCounting(1, 0);
 		}
 		mutual_ex = xSemaphoreCreateMutex();
-		leader = -1; // none working
+		leader = NONE;
 		roundRobinCounter = 0;
 	}
 		
@@ -60,17 +60,19 @@ class Scheduler {
 	}
 
 	void leaveSlot(){ // only if you cant wakeup anyone.
-		leader = -1;
+		leader = NONE;
 	}
 
 	/* methods to gain the leadership */
-	void loginRequest(uint8_t mypid){
+	bool loginRequest(uint8_t mypid){
 		if(isSlotAvailable() || mypid == leader){
 			leader = mypid;
 			xSemaphoreGive(sync[mypid].sem);
+			return true;
 		}
 		else
 			sync[mypid].blocked = true;
+			return false;
 	}
 
 	// warning: DON'T DO THIS without executing leavesafezone() first! deadlock garantee!
@@ -83,7 +85,7 @@ class Scheduler {
 	// to have a real roundrobin have to keep an internal variable and use it
 	// as preference.
 	*/
-	bool roundRobin(int8_t preference = -1){
+	bool roundRobin(int8_t preference = NONE){
 		if(preference >= 0)
 			roundRobinCounter = preference;
 		
