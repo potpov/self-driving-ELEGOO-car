@@ -63,15 +63,19 @@ void line_assist(void *pvParameters) {
 				line.setSuggested('A');	
 			if(line.centre()){
 				line.setStable(true);
+				line.leftCounter().reset();
+				line.rightCounter().reset();
 				line.setSuggested('F');
 			}
 			else if(line.left()){
 				line.setStable(false);	
 				line.setSuggested('L');
+				line.leftCounter().increment();
 			}
 			else if(line.right()){
 				line.setStable(false);
 				line.setSuggested('R');	
+				line.rightCounter().increment();
 			}
 		}
 		
@@ -114,7 +118,7 @@ void line_assist(void *pvParameters) {
 		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
 			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
-		delay(30);
+		delay(25); // as someone once said: "pausetta"
 	}
 }
 
@@ -163,7 +167,7 @@ void cruise_assist(void *pvParameters) {
 		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
 			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();	
-		delay(30);
+		delay(25); // as someone once said: "pausetta"
 	}  
 }
 
@@ -185,13 +189,13 @@ void engine_control(void *pvParameters) {
 			engine.setStatus('F');
 		}
 		else if(line.getSuggested() == 'L'){
-			engine.setLeftSpeed(REDUCTED_SPEED);
-			engine.setRightSpeed(INCREASED_SPEED);
+			engine.setLeftSpeed(REDUCTED_SPEED - line.leftCounter().value());
+			engine.setRightSpeed(INCREASED_SPEED + line.leftCounter().value());
 			engine.setStatus('F');
 		}
 		else if(line.getSuggested() == 'R'){
-			engine.setRightSpeed(REDUCTED_SPEED);
-			engine.setLeftSpeed(INCREASED_SPEED);
+			engine.setRightSpeed(REDUCTED_SPEED - line.rightCounter().value());
+			engine.setLeftSpeed(INCREASED_SPEED + line.rightCounter().value());
 			engine.setStatus('F');
 		}
 		
@@ -266,7 +270,7 @@ void engine_control(void *pvParameters) {
 			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
 		preference = (preference + 1) % THREADS_NUM;
-		delay(50);
+		delay(25); // as someone once said: "pausetta"
 	}
 }
 
@@ -291,6 +295,6 @@ void turn_signal(void *pvParameters) {
 		if(!scheduler.roundRobin(LINE_T))
 			scheduler.leaveSlot();	
 		scheduler.leaveSafeZone();
-		delay(50);
+		delay(25); // as someone once said: "pausetta"
 	}
 }

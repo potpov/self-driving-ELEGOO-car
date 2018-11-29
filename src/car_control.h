@@ -37,6 +37,7 @@
 #define INCREASED_SPEED 140
 #define BACK_REDUCED_SPEED 60
 #define BACK_INCREASED_SPEED 145
+#define COUNTER_UNIT_DIMENSION 2
 #define BREAKING_DISTANCE 50 // cm
 #define CROSSBACK_DISTANCE 20 // cm
 /* time constraints */
@@ -52,7 +53,21 @@
  * supports for the thread which manages the engines.
  */
 
+class Counter {
+	int _counter;
+	public:
+
+	Counter(){ this->reset(); }
+	
+	void reset() { _counter = 0; }
+
+	void increment() { _counter++; }
+
+	int value() { return _counter * COUNTER_UNIT_DIMENSION; }
+};
+
 class Line {
+	Counter lx, rx;
 	bool  _Stable; 
 	char  _SuggestedDirection; // F, B, P, A
 	unsigned int _LineNumber; // current line
@@ -98,6 +113,9 @@ class Line {
 
 	unsigned int getLineNumber(){ return _LineNumber; }
 
+	Counter &leftCounter(){ return lx; }
+
+	Counter &rightCounter(){ return rx; }
 	/* 
 	// those methods are used to understend how long the car is
 	// on a line, to assume if it is stable and proceed to cross line.
