@@ -26,22 +26,24 @@
 #define SERVO_PIN 3
 #define ECHO A4
 #define TRIGGER A5
-#define FORWARD_GRADE 137
-#define LEFT_GRADE 160
-#define RIGHT_GRADE 110
+#define FORWARD_GRADE 145
+#define LEFT_GRADE 179
+#define RIGHT_GRADE 112
 // light
 #define LED 12
 /* car constants */
-#define STABLE_SPEED 100
-#define REDUCTED_SPEED 40
-#define INCREASED_SPEED 150
-#define BREAKING_DISTANCE 50 //cm
-#define CROSSBACK_DISTANCE 20
+#define STABLE_SPEED 95
+#define REDUCTED_SPEED 30
+#define INCREASED_SPEED 140
+#define BACK_REDUCED_SPEED 60
+#define BACK_INCREASED_SPEED 145
+#define BREAKING_DISTANCE 50 // cm
+#define CROSSBACK_DISTANCE 20 // cm
 /* time constraints */
-#define GOBACK_STABLE_TIME 2300
+#define GOBACK_STABLE_TIME 2500
 #define NOMORE_JUST_CROSSED_TIME 1200
-#define LINE_TIMEOUT 1250
-#define CROSS_TIMEOUT 1850
+#define LINE_TIMEOUT 2000
+#define CROSS_TIMEOUT 2000
 
 /*
  * this class ensures that the car is keeping the
@@ -372,11 +374,11 @@ class Engine {
 
 	void back(){
 		this->start(); // re-start engines if stopped
-		_Status = 'B';
-		this->setRightSpeed(REDUCTED_SPEED);
-		this->setLeftSpeed(INCREASED_SPEED);	
-		delay(400); //time to cross the path
+		this->setRightSpeed(BACK_REDUCED_SPEED);
+		this->setLeftSpeed(BACK_INCREASED_SPEED);	
+		delay(650); //time to cross the path
 	}
+
 	uint8_t getRightSpeed() { return _RightSpeed; }
 
 	uint8_t getLeftSpeed() { return _LeftSpeed; }
