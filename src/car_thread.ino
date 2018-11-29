@@ -30,8 +30,6 @@ Engine 	engine;
 Scheduler scheduler;
 
 void setup() { 
-	Serial.begin(9600);
-	//while (!Serial) { ; }
 	cruise.init();
 	light.init();
 	/* launching the threads */
@@ -45,9 +43,7 @@ void loop() {}
 
 
 void line_assist(void *pvParameters) {
-	Serial.println("LINE ASSIST THREAD STARTED.");
 	for (;;) {
-		Serial.println("LINE working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(LINE_T);
@@ -118,14 +114,13 @@ void line_assist(void *pvParameters) {
 		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
 			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
+		delay(30);
 	}
 }
 
 
 void cruise_assist(void *pvParameters) {
-	Serial.println("CRUISE THREAD STARTED.");
 	for (;;) {
-		Serial.println("CRUISE working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(CRUISE_T);
@@ -155,7 +150,7 @@ void cruise_assist(void *pvParameters) {
 		} 
 
 		//when we are stable we can come back on the first line.
-		if(line.getLineNumber() == 1 && engine.getStatus() == 'F' && line.isLineStable()){
+		if(line.getLineNumber() == 1 && engine.getStatus() == 'F' && line.getStable() && line.isLineStable()){
 			cruise.lookRight();
 			delay(350);
 			cruise.setBack(cruise.getDistance() > CROSSBACK_DISTANCE); //set back true if in the other line there's enought space
@@ -168,16 +163,15 @@ void cruise_assist(void *pvParameters) {
 		if(!scheduler.roundRobin(ENGINE_T)) // try to wake engine first.
 			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();	
+		delay(30);
 	}  
 }
 
 
 void engine_control(void *pvParameters) {
-	Serial.println("ENGINE THREAD STARTED.");	
 	engine.start();
 	uint8_t preference = 0;
 	for (;;) {
-		Serial.println("ENGINE working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(ENGINE_T);
@@ -272,15 +266,14 @@ void engine_control(void *pvParameters) {
 			scheduler.leaveSlot();
 		scheduler.leaveSafeZone();
 		preference = (preference + 1) % THREADS_NUM;
+		delay(50);
 	}
 }
 
 
 void turn_signal(void *pvParameters) {
-	Serial.println("LIGHT THREAD STARTED.");
 	light.offLight();
 	for (;;) {
-		Serial.println("LIGHT working.");
 		/* SYNCRONIZATION */
 		scheduler.enterSafeZone();
 		scheduler.loginRequest(LIGHT_T);
@@ -296,7 +289,8 @@ void turn_signal(void *pvParameters) {
 		/* SYNC ENDS -> WAKE UP THREADS */
 		scheduler.enterSafeZone();
 		if(!scheduler.roundRobin(LINE_T))
-			scheduler.leaveSlot();
+			scheduler.leaveSlot();	
 		scheduler.leaveSafeZone();
+		delay(50);
 	}
 }
