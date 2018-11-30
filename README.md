@@ -27,3 +27,6 @@ each body has three phasis:
 -lights tries to wake engine first.
 
 each thread, in order to avoid deadlocks, wakes at least a thread if there's one waiting.
+
+demo is available here
+[![](http://img.youtube.com/vi/9X0A19ljb68/0.jpg)](http://www.youtube.com/watch?v=9X0A19ljb68 "demo")
