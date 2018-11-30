@@ -1,7 +1,7 @@
 /*
  Name:    car_thread.ino
  Created: 13/11/2018 9:54:35
- Author:  marco
+ Author:  Marco Cipriano
 */
 
 #include <Arduino_FreeRTOS.h>
