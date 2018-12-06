@@ -8,13 +8,7 @@
 #include "semphr.h"
 #include "car_control.h"
 #include "scheduler.h"
-
-/* using strings instead of PIDS for a more readble code */
-#define ENGINE_T	0
-#define LINE_T 		1
-#define CRUISE_T 	2
-#define LIGHT_T		3
-#define THREADS_NUM 4
+#include "const.h" // PID infos can be found here
 
 /* define thread's bodies */
 void line_assist(void *pvParameters);
