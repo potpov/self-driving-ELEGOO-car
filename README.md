@@ -10,16 +10,16 @@ NOTE: we use (proto) threads! and semaphores! and a lot of other evil stuff.
 
 thread organization:
 
-thread 1: cruise control
-thread 2: line assist
-thread 3: engine control
+thread 1: cruise control,
+thread 2: line assist,
+thread 3: engine control,
 thread 4: lights control
 
 
-each body has three phasis: 
-1: syncronization. thread checks if other threads are executing or are waiting and decided if stops or go head.
+each body has three phases: 
+1: syncronization. thread checks if other threads are executing or are waiting and decides if it is better to stop or go head.
 2: business logic. thread is executing.
-3: wake up phase. thread checks which threads need to be waken up and wake up one of them according to the following policy:
+3: wake up phase. thread checks which threads need to be waken up and wakes up one of them according to the following policy:
 
 -engine wakes cruise OR line OR alternately with a RoundRobin approach.
 -line tries to wake engine first.
