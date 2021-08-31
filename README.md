@@ -1,4 +1,4 @@
-little clever ELEGOO car
+self-driving ELEGOO car
 
 this is an Arduino Uno project. it uses the elegoo car kit: http://amzn.eu/d/fGHfR8n
 
